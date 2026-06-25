@@ -1,0 +1,34 @@
+# Caddy reverse proxy for the Mac home server.
+# Tailscale (serve/funnel) terminates TLS and forwards plain HTTP to here,
+# so Caddy runs HTTP-only on localhost:8080. Do NOT enable Caddy auto-HTTPS.
+
+{
+	admin off          # don't expose Caddy's admin API
+	auto_https off     # Tailscale owns TLS termination
+}
+
+:8080 {
+	log {
+		output stdout
+		format console
+	}
+
+	# LLM API (Ollama / mlx_lm) - gated by a bearer token from the environment
+	handle_path /llm/* {
+		@authorized header Authorization "Bearer {$LLM_BEARER_TOKEN}"
+		handle @authorized {
+			reverse_proxy 127.0.0.1:11434
+		}
+		handle {
+			respond "Unauthorized" 401
+		}
+	}
+
+	# Prefect UI + API
+	handle_path /prefect/* {
+		reverse_proxy 127.0.0.1:4200
+	}
+
+	# health check / default
+	respond "ok" 200
+}
